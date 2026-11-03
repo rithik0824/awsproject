@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: hospital-maintenance-portal
+    env: node
+    plan: free
+    rootDir: app
+    buildCommand: npm install
+    startCommand: node src/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOSPITAL_NAME
+        value: Metropolitan General Hospital
+      - key: MAINTENANCE_CONTACT
+        value: facilities-team@hospital.org
