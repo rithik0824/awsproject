@@ -1,0 +1,25 @@
+{
+  "name": "hospital-maintenance-portal",
+  "version": "1.0.0",
+  "description": "Hospital Maintenance Request Portal for tracking beds, AC, lights, and medical equipment faults",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test tests/server.test.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ssm": "^3.750.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "prom-client": "^15.1.3",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

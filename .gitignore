@@ -1,0 +1,25 @@
+# Dependency directories
+node_modules/
+package-lock.json
+
+# Environment files
+.env
+.env.local
+
+# Database storage
+app/data/*.db
+app/data/*.db-journal
+
+# Prometheus & Grafana persistent data
+monitoring/prometheus/data/
+monitoring/grafana/data/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

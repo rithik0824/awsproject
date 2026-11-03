@@ -1,0 +1,54 @@
+name: CI - Test & Validate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Unit & Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: 'app/package-lock.json'
+
+      - name: Install Application Dependencies
+        run: |
+          cd app
+          npm ci
+
+      - name: Run Test Suite
+        run: |
+          cd app
+          npm test
+
+  validate-cfn:
+    name: CloudFormation & Config Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate CloudFormation YAML Syntax
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('infrastructure/cloudformation.yml'))"
+          echo "CloudFormation template YAML syntax is valid!"
+
+      - name: Validate Prometheus Config
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('monitoring/prometheus/prometheus.yml'))"
+          echo "Prometheus config YAML syntax is valid!"
+
+      - name: Validate Grafana Datasources
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('monitoring/grafana/provisioning/datasources/datasource.yml'))"
+          echo "Grafana datasource YAML syntax is valid!"

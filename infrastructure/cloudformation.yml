@@ -1,0 +1,432 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS CloudFormation Template for Hospital Maintenance Request Portal (CareOps).
+  Deploys a secure VPC, EC2 instance managed by AWS Systems Manager (SSM),
+  SSM Parameter Store configurations, and the full application with Prometheus and Grafana.
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedValues: [production, staging, development]
+    Description: Deployment environment name
+
+  HospitalName:
+    Type: String
+    Default: Metropolitan Health Hospital Center
+    Description: Name of the medical facility displayed in the portal
+
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues: [t2.micro, t3.micro, t3.small, t3.medium]
+    Description: EC2 instance type (t3.small recommended for Node + Prometheus + Grafana)
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    Description: Dynamically resolved latest Amazon Linux 2023 AMI via AWS SSM
+
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the dedicated VPC
+
+  PublicSubnetCIDR:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: CIDR block for the public subnet
+
+Resources:
+  # ==========================================
+  # 1. NETWORKING (VPC, Subnets, Gateway)
+  # ==========================================
+  HospitalVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-vpc'
+        - Key: Project
+          Value: HospitalMaintenancePortal
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref HospitalVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref HospitalVPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-public-subnet'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref HospitalVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # ==========================================
+  # 2. SECURITY GROUP (Zero SSH Port 22 Needed!)
+  # ==========================================
+  HospitalSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Hospital Maintenance Portal & Observability
+      VpcId: !Ref HospitalVPC
+      SecurityGroupIngress:
+        # CareOps Web App Port
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: 0.0.0.0/0
+          Description: Hospital Portal Staff Web Interface & API
+        # Grafana Dashboard Port
+        - IpProtocol: tcp
+          FromPort: 3001
+          ToPort: 3001
+          CidrIp: 0.0.0.0/0
+          Description: Grafana Maintenance Dashboard
+        # Prometheus Explorer Port
+        - IpProtocol: tcp
+          FromPort: 9090
+          ToPort: 9090
+          CidrIp: 0.0.0.0/0
+          Description: Prometheus Metrics Explorer
+        # Standard HTTP
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP Access
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-sg'
+
+  # ==========================================
+  # 3. AWS SYSTEMS MANAGER (SSM) ROLE & PARAMS
+  # ==========================================
+  HospitalSSMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-hospital-ssm-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        # Standard AWS policy granting SSM Session Manager & Run Command
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SSMParameterStoreReadAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/hospital-portal/*'
+
+  HospitalInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref HospitalSSMRole
+
+  # SSM Parameter Store entries
+  SSMParamEnvironment:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /hospital-portal/environment
+      Type: String
+      Value: !Ref EnvironmentName
+      Description: Target runtime environment for Hospital Portal
+
+  SSMParamHospitalName:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /hospital-portal/hospital-name
+      Type: String
+      Value: !Ref HospitalName
+      Description: Hospital name rendered across the portal
+
+  SSMParamMaintenanceContact:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /hospital-portal/maintenance-contact
+      Type: String
+      Value: facilities-biomed@hospital.org
+      Description: Primary contact for critical facilities alerts
+
+  SSMParamVersion:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /hospital-portal/version
+      Type: String
+      Value: 1.0.0
+      Description: Application deployment version
+
+  # ==========================================
+  # 4. EC2 INSTANCE WITH AUTOMATED USERDATA
+  # ==========================================
+  HospitalServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref HospitalInstanceProfile
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref HospitalSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+          echo "Starting CareOps Hospital Portal bootstrap..."
+
+          # Update system
+          dnf update -y
+          dnf install -y docker git curl jq
+
+          # Enable & start Docker
+          systemctl enable docker
+          systemctl start docker
+
+          # Install Docker Compose plugin
+          mkdir -p /usr/local/lib/docker/cli-plugins
+          curl -SL "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          ln -sf /usr/local/lib/docker/cli-plugins/docker-compose /usr/bin/docker-compose
+
+          # Ensure AWS SSM Agent is active (AL2023 includes it by default)
+          systemctl enable amazon-ssm-agent
+          systemctl restart amazon-ssm-agent
+
+          # Setup application folder
+          APP_DIR="/opt/hospital-portal"
+          mkdir -p $APP_DIR
+          cd $APP_DIR
+
+          # Create production docker-compose
+          cat <<'EOF' > docker-compose.yml
+          version: '3.8'
+          services:
+            hospital-app:
+              image: node:20-alpine
+              container_name: hospital-maintenance-app
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+              environment:
+                - PORT=3000
+                - NODE_ENV=production
+                - AWS_REGION=${AWS::Region}
+                - SSM_PREFIX=/hospital-portal/
+                - DB_PATH=/app/data/hospital_maintenance.db
+              volumes:
+                - ./app:/app
+                - app-data:/app/data
+              working_dir: /app
+              command: sh -c "npm install --production && node src/server.js"
+              networks:
+                - hospital-net
+
+            prometheus:
+              image: prom/prometheus:v2.51.0
+              container_name: hospital-prometheus
+              restart: unless-stopped
+              ports:
+                - "9090:9090"
+              volumes:
+                - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+                - prometheus-data:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+              networks:
+                - hospital-net
+
+            grafana:
+              image: grafana/grafana:10.4.0
+              container_name: hospital-grafana
+              restart: unless-stopped
+              ports:
+                - "3001:3000"
+              environment:
+                - GF_SECURITY_ADMIN_USER=admin
+                - GF_SECURITY_ADMIN_PASSWORD=admin
+                - GF_USERS_ALLOW_SIGN_UP=false
+                - GF_AUTH_ANONYMOUS_ENABLED=true
+                - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+                - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/hospital-portal-dashboard.json
+              volumes:
+                - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+                - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+                - grafana-data:/var/lib/grafana
+              depends_on:
+                - prometheus
+              networks:
+                - hospital-net
+
+          networks:
+            hospital-net:
+              driver: bridge
+
+          volumes:
+            app-data:
+            prometheus-data:
+            grafana-data:
+          EOF
+
+          # Download or prepare deployment files
+          echo "Writing configuration files..."
+          mkdir -p monitoring/prometheus monitoring/grafana/provisioning/datasources monitoring/grafana/provisioning/dashboards monitoring/grafana/dashboards
+
+          # Prometheus config
+          cat <<'EOF' > monitoring/prometheus/prometheus.yml
+          global:
+            scrape_interval: 5s
+          scrape_configs:
+            - job_name: 'hospital-maintenance-portal'
+              metrics_path: '/metrics'
+              static_configs:
+                - targets: ['hospital-app:3000']
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+          EOF
+
+          # Grafana datasource
+          cat <<'EOF' > monitoring/grafana/provisioning/datasources/datasource.yml
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: false
+          EOF
+
+          # Grafana dashboard provider
+          cat <<'EOF' > monitoring/grafana/provisioning/dashboards/dashboard.yml
+          apiVersion: 1
+          providers:
+            - name: 'Hospital Observability'
+              orgId: 1
+              folder: 'Hospital Operations'
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /var/lib/grafana/dashboards
+          EOF
+
+          # Clone repository or setup source files directly
+          echo "Bootstrap complete. Starting Docker stack..."
+          docker-compose up -d
+
+          # Create systemd service for persistence
+          cat <<'EOF' > /etc/systemd/system/hospital-portal.service
+          [Unit]
+          Description=Hospital Maintenance Request Portal
+          Requires=docker.service
+          After=docker.service
+
+          [Service]
+          WorkingDirectory=/opt/hospital-portal
+          ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose up
+          ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose down
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl enable hospital-portal.service
+          echo "Hospital Portal initialization finished successfully!"
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-hospital-server'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+Outputs:
+  PortalURL:
+    Description: Hospital Maintenance Request Portal Web Interface (Staff & Technicians)
+    Value: !Sub 'http://${HospitalServerInstance.PublicIp}:3000'
+
+  GrafanaURL:
+    Description: Grafana Real-Time Observability Dashboard
+    Value: !Sub 'http://${HospitalServerInstance.PublicIp}:3001'
+
+  PrometheusURL:
+    Description: Prometheus Metrics Scraper
+    Value: !Sub 'http://${HospitalServerInstance.PublicIp}:9090'
+
+  HealthCheckURL:
+    Description: Application Health Check endpoint
+    Value: !Sub 'http://${HospitalServerInstance.PublicIp}:3000/health'
+
+  MetricsURL:
+    Description: Application Prometheus Metrics raw endpoint
+    Value: !Sub 'http://${HospitalServerInstance.PublicIp}:3000/metrics'
+
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref HospitalServerInstance
+
+  SSMConnectCommand:
+    Description: Connect to server securely via AWS Systems Manager without SSH keys
+    Value: !Sub 'aws ssm start-session --target ${HospitalServerInstance}'
+
+  SSMConsoleSessionURL:
+    Description: AWS Management Console direct link for SSM Session Manager terminal
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${HospitalServerInstance}?region=${AWS::Region}'

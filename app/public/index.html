@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CareOps - Hospital Maintenance & Fault Tracking Portal</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="top-nav">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2v20M2 12h20"/>
+          </svg>
+        </div>
+        <div>
+          <h1 id="hospital-title">CareOps Medical Maintenance</h1>
+          <p class="brand-sub">Bed, HVAC, Lighting & Equipment Fault Response System</p>
+        </div>
+      </div>
+      
+      <div class="header-badges">
+        <span class="badge badge-health" id="health-badge">
+          <span class="indicator online"></span> System Healthy
+        </span>
+        <span class="badge badge-ssm" id="ssm-badge" title="AWS Systems Manager Parameter Store Status">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span id="ssm-source-text">AWS SSM: Loading...</span>
+        </span>
+        <div class="clock" id="live-clock">--:--:--</div>
+        <button class="btn btn-primary" id="btn-open-report">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Report Maintenance Fault
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Quick Telemetry & Monitoring Link Banner -->
+      <section class="telemetry-bar">
+        <div class="telemetry-info">
+          <strong>AWS Observability Stack:</strong>
+          <span>Prometheus Scraping: <code id="metrics-link">/metrics</code></span>
+          <span class="divider">|</span>
+          <span>Grafana Dashboard: <code>Port 3001</code></span>
+          <span class="divider">|</span>
+          <span>AWS Systems Manager: <code id="ssm-env-tag">production</code></span>
+        </div>
+        <div class="telemetry-actions">
+          <a href="/metrics" target="_blank" class="btn btn-sm btn-ghost">View Prometheus Metrics</a>
+          <button class="btn btn-sm btn-ghost" id="btn-show-ssm">SSM Details</button>
+        </div>
+      </section>
+
+      <!-- KPI Overview Cards -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Faults Logged</div>
+          <div class="kpi-value" id="kpi-total">0</div>
+          <div class="kpi-hint">All historical and active records</div>
+        </div>
+
+        <div class="kpi-card kpi-critical">
+          <div class="kpi-label">Critical Faults (Immediate)</div>
+          <div class="kpi-value" id="kpi-critical">0</div>
+          <div class="kpi-hint">Patient safety & life-support impact</div>
+        </div>
+
+        <div class="kpi-card kpi-inprogress">
+          <div class="kpi-label">Active Under Repair</div>
+          <div class="kpi-value" id="kpi-open">0</div>
+          <div class="kpi-hint">Assigned / In-progress repairs</div>
+        </div>
+
+        <div class="kpi-card kpi-resolved">
+          <div class="kpi-label">Resolved / Restored</div>
+          <div class="kpi-value" id="kpi-resolved">0</div>
+          <div class="kpi-hint">Equipment back in full service</div>
+        </div>
+      </section>
+
+      <!-- Filter and Control Bar -->
+      <section class="controls-card">
+        <div class="filter-row">
+          <div class="search-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="filter-search" placeholder="Search equipment, ticket ID, room, or fault...">
+          </div>
+
+          <div class="select-group">
+            <select id="filter-category">
+              <option value="">All Categories (Beds, AC, Lights...)</option>
+              <option value="BED">Hospital Beds</option>
+              <option value="HVAC">Air-Conditioning / HVAC</option>
+              <option value="LIGHTING">Surgical / Room Lighting</option>
+              <option value="MEDICAL_DEVICE">Medical Equipment</option>
+              <option value="ELECTRICAL">Electrical / Backup Power</option>
+              <option value="PLUMBING">Medical Gas / Plumbing</option>
+            </select>
+
+            <select id="filter-priority">
+              <option value="">All Priorities</option>
+              <option value="CRITICAL">Critical (Life-Safety)</option>
+              <option value="HIGH">High Priority</option>
+              <option value="MEDIUM">Medium Priority</option>
+              <option value="LOW">Low Priority</option>
+            </select>
+
+            <select id="filter-status">
+              <option value="">All Repair Statuses</option>
+              <option value="OPEN">Open (Unassigned)</option>
+              <option value="ASSIGNED">Assigned</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="RESOLVED">Resolved</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+
+            <select id="filter-dept">
+              <option value="">All Departments</option>
+              <option value="ICU">ICU</option>
+              <option value="EMERGENCY">Emergency (ER)</option>
+              <option value="SURGERY">Surgery / OR</option>
+              <option value="RADIOLOGY">Radiology</option>
+              <option value="PEDIATRICS">Pediatrics</option>
+              <option value="MATERNITY">Maternity</option>
+              <option value="GENERAL_WARD">General Ward</option>
+            </select>
+
+            <button class="btn btn-outline" id="btn-refresh" title="Reload live data">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              Refresh
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Maintenance Requests Table -->
+      <section class="table-card">
+        <div class="table-header-title">
+          <h2>Active Hospital Maintenance Tickets</h2>
+          <span class="record-count" id="record-count">Showing 0 tickets</span>
+        </div>
+        <div class="table-responsive">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Ticket</th>
+                <th>Equipment & Category</th>
+                <th>Department & Location</th>
+                <th>Fault Description</th>
+                <th>Priority</th>
+                <th>Repair Status</th>
+                <th>Assigned Technician</th>
+                <th>Reported By</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="tickets-tbody">
+              <tr>
+                <td colspan="9" class="loading-cell">Loading hospital maintenance records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: Report New Maintenance Fault -->
+    <div class="modal-backdrop" id="modal-report">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Report Hospital Maintenance Fault</h3>
+          <button class="modal-close" data-close="modal-report">&times;</button>
+        </div>
+        <form id="form-report-fault">
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="input-equipment">Equipment / Item Name *</label>
+                <input type="text" id="input-equipment" required placeholder="e.g. ICU Electric Bed #04, Surgery AC Unit 2">
+              </div>
+
+              <div class="form-group">
+                <label for="input-category">Equipment Category *</label>
+                <select id="input-category" required>
+                  <option value="">Select Category</option>
+                  <option value="BED">Hospital Bed / Gurney</option>
+                  <option value="HVAC">Air Conditioning / HVAC / Chiller</option>
+                  <option value="LIGHTING">Surgical / Examination Lighting</option>
+                  <option value="MEDICAL_DEVICE">Medical Device / Patient Monitor</option>
+                  <option value="ELECTRICAL">Electrical / Backup Generator</option>
+                  <option value="PLUMBING">Medical Oxygen / Plumbing</option>
+                  <option value="OTHER">Other Hospital Facility</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="input-dept">Department / Ward *</label>
+                <select id="input-dept" required>
+                  <option value="">Select Department</option>
+                  <option value="ICU">Intensive Care Unit (ICU)</option>
+                  <option value="EMERGENCY">Emergency Department (ER)</option>
+                  <option value="SURGERY">Operating Room / Surgery (OR)</option>
+                  <option value="RADIOLOGY">Radiology / MRI / CT</option>
+                  <option value="PEDIATRICS">Pediatrics Ward</option>
+                  <option value="MATERNITY">Maternity & Neonatal</option>
+                  <option value="CARDIOLOGY">Cardiology Ward</option>
+                  <option value="GENERAL_WARD">General Patient Ward</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="input-location">Specific Room / Bay Location *</label>
+                <input type="text" id="input-location" required placeholder="e.g. Bay 3, Room 412, OR Suite 1">
+              </div>
+
+              <div class="form-group">
+                <label for="input-priority">Fault Priority Level *</label>
+                <select id="input-priority" required>
+                  <option value="CRITICAL">CRITICAL (Immediate Patient / Life Safety Risk)</option>
+                  <option value="HIGH">HIGH (Urgent clinical disruption)</option>
+                  <option value="MEDIUM" selected>MEDIUM (Degraded operation, workaround available)</option>
+                  <option value="LOW">LOW (Cosmetic / routine repair)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="input-reporter">Reported By (Staff Name & Role) *</label>
+                <input type="text" id="input-reporter" required placeholder="e.g. Nurse Sarah, Dr. Alvarez, Charge Nurse">
+              </div>
+
+              <div class="form-group full-width">
+                <label for="input-desc">Fault Description & Symptoms *</label>
+                <textarea id="input-desc" rows="3" required placeholder="Describe what failed, any unusual noises, sparks, temperature changes, or patient impacts..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" data-close="modal-report">Cancel</button>
+            <button type="submit" class="btn btn-primary">Submit Maintenance Request</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Manage / Assign / Resolve Ticket -->
+    <div class="modal-backdrop" id="modal-manage">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>Manage Maintenance Ticket: <span id="manage-ticket-id"></span></h3>
+          <button class="modal-close" data-close="modal-manage">&times;</button>
+        </div>
+        <form id="form-manage-ticket">
+          <input type="hidden" id="manage-id">
+          <div class="modal-body">
+            <div class="ticket-summary-box" id="manage-summary-box">
+              <!-- Rendered via JS -->
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="manage-status">Repair Status *</label>
+                <select id="manage-status" required>
+                  <option value="OPEN">OPEN (Awaiting Technician)</option>
+                  <option value="ASSIGNED">ASSIGNED (Technician Dispatched)</option>
+                  <option value="IN_PROGRESS">IN PROGRESS (Work Underway)</option>
+                  <option value="RESOLVED">RESOLVED (Fault Repaired / Tested)</option>
+                  <option value="CLOSED">CLOSED (Sign-off Complete)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="manage-tech">Assign Technician *</label>
+                <select id="manage-tech">
+                  <option value="Unassigned">Unassigned</option>
+                  <option value="Marcus Vance (Biomed Tech)">Marcus Vance (Biomed Tech)</option>
+                  <option value="David Miller (HVAC Specialist)">David Miller (HVAC Specialist)</option>
+                  <option value="Elena Rostova (Clinical Engineer)">Elena Rostova (Clinical Engineer)</option>
+                  <option value="Arthur Pendelton (Facilities)">Arthur Pendelton (Facilities)</option>
+                  <option value="Sarah Gomez (Master Electrician)">Sarah Gomez (Master Electrician)</option>
+                  <option value="On-Call Maintenance Team">On-Call Maintenance Team</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="manage-priority">Update Priority</label>
+                <select id="manage-priority">
+                  <option value="CRITICAL">CRITICAL</option>
+                  <option value="HIGH">HIGH</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="LOW">LOW</option>
+                </select>
+              </div>
+
+              <div class="form-group full-width">
+                <label for="manage-notes">Technician Notes / Parts Replaced / Resolution Summary</label>
+                <textarea id="manage-notes" rows="3" placeholder="Enter inspection notes, replacement parts, safety checks, or resolution details..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" data-close="modal-manage">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Ticket Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: AWS Systems Manager Parameter Info -->
+    <div class="modal-backdrop" id="modal-ssm">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>AWS Systems Manager (SSM) Integration</h3>
+          <button class="modal-close" data-close="modal-ssm">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p>This portal utilizes <strong>AWS Systems Manager Parameter Store</strong> to inject centralized configurations securely into running instances without hardcoded secrets or redeploying code.</p>
+          <div class="ssm-details-box">
+            <pre id="ssm-json-content">Loading configuration...</pre>
+          </div>
+          <div class="ssm-guide-note">
+            <h4>AWS SSM Capabilities in this Project:</h4>
+            <ul>
+              <li><strong>SSM Parameter Store:</strong> Dynamically loads hospital parameters (/hospital-portal/*).</li>
+              <li><strong>SSM Session Manager:</strong> Connect securely to EC2 terminal with <code>aws ssm start-session</code> without opening port 22 or managing SSH keys.</li>
+              <li><strong>SSM Run Command:</strong> Trigger remote configuration updates and container deployments via GitHub Actions.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" data-close="modal-ssm">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

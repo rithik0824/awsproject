@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Deploy or update Hospital Maintenance Request Portal container stack via AWS Systems Manager Run Command",
+  "parameters": {
+    "RepositoryUrl": {
+      "type": "String",
+      "description": "Git repository URL to pull updates from",
+      "default": "https://github.com/your-org/hospital-maintenance-portal.git"
+    },
+    "Branch": {
+      "type": "String",
+      "description": "Git branch to checkout",
+      "default": "main"
+    }
+  },
+  "mainSteps": [
+    {
+      "action": "aws:runShellScript",
+      "name": "UpdateAndRestartServices",
+      "inputs": {
+        "runCommand": [
+          "#!/bin/bash",
+          "set -e",
+          "echo '==== AWS SSM Run Command: Deploying CareOps Hospital Portal ===='",
+          "cd /opt/hospital-portal",
+          "if [ -d \".git\" ]; then",
+          "  git pull origin {{ Branch }}",
+          "fi",
+          "docker compose pull || true",
+          "docker compose up -d --remove-orphans",
+          "echo 'Checking container health...'",
+          "sleep 5",
+          "curl -sSf http://localhost:3000/health || exit 1",
+          "echo 'Deployment verified successfully!'"
+        ]
+      }
+    }
+  ]
+}
