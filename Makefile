@@ -52,3 +52,4 @@ ssm-connect:
 	  --output text) && \
 	echo "Connecting to EC2 instance $$INSTANCE_ID via AWS Systems Manager..." && \
 	aws ssm start-session --target $$INSTANCE_ID
+

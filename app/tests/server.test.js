@@ -65,3 +65,4 @@ test('POST /api/requests creates a new maintenance ticket and validates fields',
   assert.equal(patchRes.body.status, 'IN_PROGRESS');
   assert.equal(patchRes.body.assigned_technician, 'Marcus Vance (Biomed Tech)');
 });
+

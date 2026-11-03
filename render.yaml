@@ -11,6 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: HOSPITAL_NAME
-        value: Metropolitan General Hospital
+        value: Rathinam Hospital
       - key: MAINTENANCE_CONTACT
-        value: facilities-team@hospital.org
+        value: facilities-team@rathinam.org
+

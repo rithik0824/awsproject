@@ -12,6 +12,7 @@ services:
     environment:
       - PORT=3000
       - NODE_ENV=production
+      - HOSPITAL_NAME=Rathinam Hospital
       - AWS_REGION=us-east-1
       - SSM_PREFIX=/hospital-portal/
       - DB_PATH=/app/data/hospital_maintenance.db
@@ -74,3 +75,4 @@ volumes:
   app-data:
   prometheus-data:
   grafana-data:
+

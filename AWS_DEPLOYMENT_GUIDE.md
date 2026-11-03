@@ -253,3 +253,4 @@ When you are done testing or demonstrating the project, delete all created resou
 ```bash
 aws cloudformation delete-stack --stack-name hospital-portal-production
 ```
+

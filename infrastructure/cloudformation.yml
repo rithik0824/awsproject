@@ -13,7 +13,7 @@ Parameters:
 
   HospitalName:
     Type: String
-    Default: Metropolitan Health Hospital Center
+    Default: Rathinam Hospital
     Description: Name of the medical facility displayed in the portal
 
   InstanceType:
@@ -430,3 +430,4 @@ Outputs:
   SSMConsoleSessionURL:
     Description: AWS Management Console direct link for SSM Session Manager terminal
     Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${HospitalServerInstance}?region=${AWS::Region}'
+

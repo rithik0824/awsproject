@@ -15,8 +15,8 @@ try {
 const appConfig = {
   source: 'local-defaults',
   environment: process.env.NODE_ENV || 'development',
-  hospitalName: process.env.HOSPITAL_NAME || 'General Hospital & Trauma Center',
-  maintenanceContact: process.env.MAINTENANCE_CONTACT || 'facilities@hospital.org',
+  hospitalName: process.env.HOSPITAL_NAME || 'Rathinam Hospital',
+  maintenanceContact: process.env.MAINTENANCE_CONTACT || 'facilities@rathinam.org',
   enableAuditLog: true,
   lastLoadedAt: new Date().toISOString()
 };
@@ -65,3 +65,4 @@ module.exports = {
   loadSsmParameters,
   getConfig: () => appConfig
 };
+
