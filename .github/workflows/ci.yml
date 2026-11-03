@@ -40,8 +40,15 @@ jobs:
 
       - name: Validate CloudFormation YAML Syntax
         run: |
-          python3 -c "import yaml; yaml.safe_load(open('infrastructure/cloudformation.yml'))"
-          echo "CloudFormation template YAML syntax is valid!"
+          python3 -c "
+          import yaml
+          class CFNLoader(yaml.SafeLoader): pass
+          for tag in ['!Ref', '!Sub', '!GetAtt', '!Join', '!Select', '!Split', '!FindInMap', '!Base64', '!ImportValue']:
+              CFNLoader.add_constructor(tag, lambda loader, node: None)
+          with open('infrastructure/cloudformation.yml') as f:
+              yaml.load(f, Loader=CFNLoader)
+          print('CloudFormation template YAML syntax is valid!')
+          "
 
       - name: Validate Prometheus Config
         run: |
