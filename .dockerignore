@@ -1,0 +1,8 @@
+node_modules
+app/node_modules
+npm-debug.log
+data/*.db
+data/*.db-journal
+.git
+.DS_Store
+
