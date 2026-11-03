@@ -114,9 +114,21 @@ app.get('/api/requests', async (req, res) => {
       params.push(category);
     }
     if (search) {
-      query += ` AND (equipment_name LIKE ? OR description LIKE ? OR room_location LIKE ? OR ticket_number LIKE ?)`;
+      query += ` AND (
+        ticket_number LIKE ? OR 
+        equipment_name LIKE ? OR 
+        reported_by LIKE ? OR 
+        assigned_technician LIKE ? OR 
+        room_location LIKE ? OR 
+        description LIKE ? OR 
+        department LIKE ? OR 
+        category LIKE ? OR 
+        priority LIKE ? OR 
+        status LIKE ? OR 
+        resolution_notes LIKE ?
+      )`;
       const s = `%${search}%`;
-      params.push(s, s, s, s);
+      params.push(s, s, s, s, s, s, s, s, s, s, s);
     }
 
     query += ` ORDER BY 
@@ -291,3 +303,4 @@ if (require.main === module) {
 }
 
 module.exports = { app, start };
+
